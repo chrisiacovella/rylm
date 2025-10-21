@@ -5,24 +5,41 @@ from dataclasses import dataclass
 
 @dataclass
 class Fingerprint:
+    """
+    Dataclass to store the Rylm fingerprint values and other metadata
+
+    Parameters:
+    ----------
+    frequencies : List[int]
+        A list of integers > 0, representing the frequencies used in the calculation.
+    include_w : bool
+        If True, the Wigner3j values are included in the calculations and fingerprints.
+    include_n_coord : bool
+        If True, the coordination number is included in the fingerprint.
+    values : Dict[str, np.array]
+        A dictionary where keys are the frequencies (e.g., 'q4', 'q6', 'w4', 'w6') and values are the calculated Rylm descriptors for each frequency.
+
+    """
+
     frequencies: List[int]
-    include_w: bool = False
+    include_w: bool = True
+    include_n_coord: bool = True
     values: Dict[str, np.array] = None
 
 
-class RylmCluster:
+class Rylm:
     """
 
-    Class to calculate the Rylm descriptor for a single cluster from a set of points in 3D space.
+    Class to calculate the Rylm descriptor for a single cluster of points in 3D space.
 
-    Note this is not intented to be used for periodic systems, and will not work correctly with PBC.
+    Note this is not intended to be used for periodic systems and will not work correctly with PBC.
 
     """
 
     def __init__(
         self,
         frequencies: List[int] = [4, 6, 8, 10, 12],
-        include_w: bool = False,
+        include_w: bool = True,
         include_n_coord: bool = True,
     ):
         """
@@ -33,16 +50,22 @@ class RylmCluster:
         frequencies : List[int], default [4,6,8,10,12]
             A list of integers > 0, representing the frequencies to calculate with spherical harmonics.
             These frequencies should be even integers which are invariant under inversion.
-        include_w : bool, default False
+        include_w : bool, default True
             If True, the Wigner3j values will be included in the calculations if using freud.
         include_n_coord : bool, default True
             If True, the coordination number in the fingerprint
         """
+        for l in frequencies:
+            if l < 0:
+                raise ValueError("Frequency l must be a non-negative integer.")
+            if l % 2 != 0:
+                raise ValueError("Frequency l must be an even integer.")
+
         self._frequencies = frequencies
         self._include_w = include_w
         self._include_n_coord = include_n_coord
 
-    def calculate_fingerprint(
+    def calculate(
         self, points: np.array, cutoff: Optional[float] = None, backend: str = "freud"
     ) -> Dict[str, np.array]:
         """
@@ -54,7 +77,7 @@ class RylmCluster:
             An array of shape (n, 3) where n is the number of points, and each point is represented by its (x, y, z) coordinates.
             Note, the first point is considered the origin and will not be included in the descriptor calculation.
         cutoff : Optional[float], default None
-            A cutoff distance for the calculation. If provided, it will be used to filter points based on their distance from the origin.
+            A cutoff distance for the calculation. If provided, it will be used to filter points based on their distance from the origin (i.e., first point).
         backend : str, default "freud"
             The backend to use for the calculation. Options are "freud" or "scipy".
             Note the scipy backend will not compute the wigner3j values.
@@ -97,7 +120,7 @@ class RylmCluster:
 
         # first convert the points to spherical coordinates
 
-        from rylm.utils import convert_to_spherical_coordinates, calculate_Q
+        from rylm.utils import convert_to_spherical_coordinates, calculate_Q_scipy
 
         theta, phi, r = convert_to_spherical_coordinates(points)
 
@@ -113,14 +136,14 @@ class RylmCluster:
 
         # calculate the spherical harmonics for each frequency
         fingerprint = Fingerprint(
-            frequencies=self._frequencies, include_w=self._include_w
+            frequencies=self._frequencies,
+            include_w=self._include_w,
+            include_n_coord=self._include_n_coord,
         )
 
         fingerprint_dict = {}
         for l in self._frequencies:
-            if l < 0:
-                raise ValueError("Frequency l must be a non-negative integer.")
-            ql = calculate_Q(theta, phi, l)
+            ql = calculate_Q_scipy(theta, phi, l)
             fingerprint_dict[f"q{l}"] = ql
         if self._include_n_coord:
             fingerprint_dict["n_coord"] = len(theta)
@@ -164,7 +187,7 @@ class RylmCluster:
 
         max_distance = np.max(np.linalg.norm(points[1:] - points[0], axis=1))
 
-        box = freud.box.Box.cube(max_distance * 4)
+        box = freud.box.Box.cube(max_distance * 5)
         system = freud.AABBQuery(box, points)
 
         # Query the nearest neighbors
@@ -189,7 +212,9 @@ class RylmCluster:
         nlist = nlist.filter(filter_list)
 
         fingerprint = Fingerprint(
-            frequencies=self._frequencies, include_w=self._include_w
+            frequencies=self._frequencies,
+            include_w=self._include_w,
+            include_n_coord=self._include_n_coord,
         )
 
         fingerprint_temp = {}
@@ -209,54 +234,110 @@ class RylmCluster:
             if self._include_w:
                 fingerprint_temp[f"w{l}"] = wl
         if self._include_n_coord:
-            fingerprint_temp["n_coord"] = (
-                len(nlist) - 1
+            fingerprint_temp["n_coord"] = len(
+                nlist
             )  # exclude the first point (the origin)
         fingerprint.values = fingerprint_temp
         return fingerprint
 
 
-def euclidean_distance(
-    fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
-) -> float:
+class Similarity:
     """
-    Calculate the Euclidean distance between two Rylm fingerprints
+    Class to calculate similarity between two Rylm fingerprints.
 
-    Parameters:
-    ----------
-    fingerprint1 : Fingerprint
-        The first Rylm fingerprint.
-    fingerprint2 : Fingerprint
-        The second Rylm fingerprint.
-    normalize : bool, default True
-        If True, the similarity will be normalized by the sum of absolute values of the fingerprints.
-
-    Returns:
-    ----------
-    float
-        A similarity score between the two fingerprints.
     """
-    # Check if the frequencies match
-    # they can be in any order, so we sort them
-    if sorted(fingerprint1.frequencies) != sorted(fingerprint2.frequencies):
-        raise ValueError("Frequencies of the fingerprints do not match.")
 
-    if fingerprint1.include_w != fingerprint2.include_w:
-        raise ValueError("include_w of the fingerprints do not match.")
+    def __init__(self, metric: str = "euclidean", normalize: bool = True):
+        """
+        Initialize the Similarity class with the specified metric.
 
-    # Calculate the similarity as the sum of squared differences
-    similarity = 0.0
-    normalization = 0.0
-    for key in fingerprint1.values.keys():
-        if key in fingerprint2.values:
-            similarity += (fingerprint1.values[key] - fingerprint2.values[key]) ** 2
-            normalization += np.abs(fingerprint1.values[key]) + np.abs(
-                fingerprint2.values[key]
-            )
-    if normalize:
-        if normalization == 0:
-            raise ValueError("Normalization factor is zero, cannot compute similarity.")
-        return np.sqrt(similarity) / normalization
+        Parameters:
+        ----------
+        metric : str, default "euclidean"
+            The similarity metric to use. Currently, only "euclidean" is supported.
+        normalize : bool, default True
+            If True, the similarity will be normalized by the sum of absolute values of the fingerprints.
+        """
+        if metric == "euclidean":
+            self.similarity_function = self._euclidean_distance
+        else:
+            raise ValueError(f"Unknown metric: {metric}")
 
-    else:
-        return np.sqrt(similarity)
+        self._metric = metric
+        self._normalize = normalize
+
+    def calculate(self, fingerprint1: Fingerprint, fingerprint2: Fingerprint) -> float:
+        """
+        Calculate the similarity between two Rylm fingerprints.
+
+        Parameters:
+        ----------
+        fingerprint1 : Fingerprint
+            The first Rylm fingerprint.
+        fingerprint2 : Fingerprint
+            The second Rylm fingerprint.
+        Returns:
+        ----------
+        float
+            A similarity score between the two fingerprints.
+
+        """
+        # Check if the frequencies match
+        # they can be in any order, so we sort them
+        if sorted(fingerprint1.frequencies) != sorted(fingerprint2.frequencies):
+            raise ValueError("Frequencies of the fingerprints do not match.")
+
+        # Check if include_w and include_n_coord match
+        if fingerprint1.include_w != fingerprint2.include_w:
+            raise ValueError("include_w of the fingerprints do not match.")
+
+        if fingerprint1.include_n_coord != fingerprint2.include_n_coord:
+            raise ValueError("include_n_coord of the fingerprints do not match.")
+
+        # Check if the values keys match
+        if fingerprint1.values.keys() != fingerprint2.values.keys():
+            raise ValueError("Values keys of the fingerprints do not match.")
+
+        return self.similarity_function(
+            fingerprint1, fingerprint2, normalize=self._normalize
+        )
+
+    def _euclidean_distance(
+        self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
+    ) -> float:
+        """
+        Calculate the Euclidean distance between two Rylm fingerprints
+
+        Parameters:
+        ----------
+        fingerprint1 : Fingerprint
+            The first Rylm fingerprint.
+        fingerprint2 : Fingerprint
+            The second Rylm fingerprint.
+        normalize : bool, default True
+            If True, the similarity will be normalized by the sum of absolute values of the fingerprints.
+
+        Returns:
+        ----------
+        float
+            A similarity score between the two fingerprints.
+        """
+
+        # Calculate the similarity as the sum of squared differences
+        similarity = 0.0
+        normalization = 0.0
+        for key in fingerprint1.values.keys():
+            if key in fingerprint2.values:
+                similarity += (fingerprint1.values[key] - fingerprint2.values[key]) ** 2
+                normalization += np.abs(fingerprint1.values[key]) + np.abs(
+                    fingerprint2.values[key]
+                )
+        if normalize:
+            if normalization == 0:
+                raise ValueError(
+                    "Normalization factor is zero, cannot compute similarity."
+                )
+            return np.sqrt(similarity) / normalization
+
+        else:
+            return np.sqrt(similarity)

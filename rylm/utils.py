@@ -43,9 +43,9 @@ def convert_to_spherical_coordinates(points: np.array):
     return theta, phi, r
 
 
-def calculate_Q(theta: np.array, phi: np.array, l: int, include_w: bool = True):
+def calculate_Q_scipy(theta: np.array, phi: np.array, l: int, include_w: bool = True):
     """
-    Calculate invariant Q for a given frequency (l) and spherical coordinates (theta, phi).
+    Calculate invariant Q for frequency (l) and spherical coordinates (theta, phi) using scipy's sph_harm_y function.
 
     Parameters:
     ----------
@@ -58,7 +58,8 @@ def calculate_Q(theta: np.array, phi: np.array, l: int, include_w: bool = True):
 
     Returns:
     ----------
-
+    Q_l : float
+        The rotationally invariant descriptor for the given frequency l.
     """
 
     from scipy.special import sph_harm_y

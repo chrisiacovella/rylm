@@ -28,7 +28,8 @@ icosahedron = np.array(
     ]
 )
 
-# create a structure that is the icosahedron but with additional points placed outside of the initial shell
+# create a structure that is the icosahedron but with 4 additional points placed
+# outside of the first neighbor shell for testing purposes
 icosahedron_extended = np.array(
     [
         [0, 0, 0],  # Central point
@@ -83,7 +84,7 @@ octahedron = np.array(
     ]
 )
 
-trigonal_pyramidal = np.array(
+triagonal_pyramidal = np.array(
     [
         [0, 0, 0],  # Central point
         [1, 0, -1 / math.sqrt(2)],
