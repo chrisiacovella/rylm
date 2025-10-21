@@ -1,5 +1,4 @@
 import numpy as np
-from pygments.lexers.qvt import QVToLexer
 
 
 def convert_to_spherical_coordinates(points: np.array):
