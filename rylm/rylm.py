@@ -1,7 +1,6 @@
 import numpy as np
-from typing import List, Tuple, Optional, Dict
+from typing import Optional
 from dataclasses import dataclass
-
 
 @dataclass
 class Fingerprint:
@@ -10,21 +9,21 @@ class Fingerprint:
 
     Parameters:
     ----------
-    frequencies : List[int]
+    frequencies : list[int]
         A list of integers > 0, representing the frequencies used in the calculation.
     include_w : bool
         If True, the Wigner3j values are included in the calculations and fingerprints.
     include_n_coord : bool
         If True, the coordination number is included in the fingerprint.
-    values : Dict[str, np.array]
+    values : dict[str, np.array]
         A dictionary where keys are the frequencies (e.g., 'q4', 'q6', 'w4', 'w6') and values are the calculated Rylm descriptors for each frequency.
 
     """
 
-    frequencies: List[int]
+    frequencies: list[int]
     include_w: bool = True
     include_n_coord: bool = True
-    values: Dict[str, np.array] = None
+    values: dict[str, np.array] = None
 
 
 class Rylm:
@@ -38,7 +37,7 @@ class Rylm:
 
     def __init__(
         self,
-        frequencies: List[int] = [4, 6, 8, 10, 12],
+        frequencies: list[int] = [2, 4, 6, 8, 10, 12],
         include_w: bool = True,
         include_n_coord: bool = True,
     ):
@@ -47,7 +46,7 @@ class Rylm:
 
         Parameters:
         ----------
-        frequencies : List[int], default [4,6,8,10,12]
+        frequencies : list[int], default [2, 4,6,8,10,12]
             A list of integers > 0, representing the frequencies to calculate with spherical harmonics.
             These frequencies should be even integers which are invariant under inversion.
         include_w : bool, default True
@@ -66,8 +65,8 @@ class Rylm:
         self._include_n_coord = include_n_coord
 
     def calculate(
-        self, points: np.array, cutoff: Optional[float] = None, backend: str = "freud"
-    ) -> Dict[str, np.array]:
+        self, points: np.array, cutoff: Optional[float] = None, backend: str = "freud", center_index: int = 0,
+    ) -> Fingerprint:
         """
         Calculate the Rylm descriptor for a set of points in 3D space.
 
@@ -75,18 +74,34 @@ class Rylm:
         ----------
         points : np.array
             An array of shape (n, 3) where n is the number of points, and each point is represented by its (x, y, z) coordinates.
-            Note, the first point is considered the origin and will not be included in the descriptor calculation.
+            Note, the origin of the complex is set with ``center_index`` and will not be included in the descriptor calculation.
         cutoff : Optional[float], default None
             A cutoff distance for the calculation. If provided, it will be used to filter points based on their distance from the origin (i.e., first point).
         backend : str, default "freud"
             The backend to use for the calculation. Options are "freud" or "scipy".
             Note the scipy backend will not compute the wigner3j values.
+        center_index : int, default=0
+            The index of the central atom.
 
         Returns:
         ----------
-        Dict[str, np.array]
-            A dictionary where keys are the frequencies (e.g., 'q4', 'q6') and values are the calculated Rylm descriptors for each frequency.
+        Fingerprint
+            A dataclass that stores the frequencies, whether wigner3j values are included, and a dictionary of values
+            where keys are the frequencies (e.g., 'q4', 'q6) and values are the calculated Rylm descriptors for each frequency.
         """
+        
+        if not isinstance(points, np.ndarray):
+            raise TypeError("points must be a numpy array")
+
+        if points.ndim != 2 or points.shape[1] != 3:
+            raise ValueError("points must be a 2D array with shape (n, 3)")
+
+        if center_index < 0 or center_index >= len(points):
+            raise ValueError("center_index is out of bounds for the points array")
+
+        # Reorder points so that the center_index is the first row
+        points = np.vstack([points[center_index], np.delete(points, center_index, axis=0)])
+
         if backend == "scipy":
             return self._calculate_fingerprint_scipy(points, cutoff)
         elif backend == "freud":
@@ -96,7 +111,7 @@ class Rylm:
 
     def _calculate_fingerprint_scipy(
         self, points: np.array, cutoff: Optional[float] = None
-    ) -> np.array:
+    ) -> Fingerprint:
         """
         Calculate the Rylm descriptor for a set of points in 3D space.
 
@@ -152,7 +167,7 @@ class Rylm:
 
     def _calculate_fingerprint_freud(
         self, points: np.array, cutoff: Optional[float] = None
-    ) -> np.array:
+    ) -> Fingerprint:
         """
         Calculate the Rylm descriptor for a set of points in 3D space.
 
@@ -257,9 +272,16 @@ class Similarity:
             The similarity metric to use. Currently, only "euclidean" is supported.
         normalize : bool, default True
             If True, the similarity will be normalized by the sum of absolute values of the fingerprints.
+
         """
         if metric == "euclidean":
-            self.similarity_function = self._euclidean_distance
+            self.similarity_function = self._euclidean_similarity
+        elif metric == "manhattan":
+            self.similarity_function = self._manhattan_similarity
+        elif metric == "cosine":
+            self.similarity_function = self._cosine_similarity
+        elif metric == "angular":
+            self.similarity_function = self._angular_similarity
         else:
             raise ValueError(f"Unknown metric: {metric}")
 
@@ -302,11 +324,29 @@ class Similarity:
             fingerprint1, fingerprint2, normalize=self._normalize
         )
 
-    def _euclidean_distance(
+
+    def _process_fingerprints(self, fingerprint1, fingerprint2):
+        fp1 = {
+            int(key[1:]): fingerprint1.values[key] if not fingerprint1.include_w else [fingerprint1.values[key], fingerprint1.values["w"+key[1:]]]
+            for key in fingerprint1.values.keys() if key != "n_coord"
+        }
+        fp2 = {
+            int(key[1:]): fingerprint2.values[key] if not fingerprint2.include_w else [fingerprint2.values[key], fingerprint2.values["w"+key[1:]]]
+            for key in fingerprint2.values.keys() if key != "n_coord"
+        }
+        if set(fp1.keys()) != set(fp2.keys()):
+            raise ValueError("Frequencies between fingerprints do not match.")
+
+        return fp1, fp2
+            
+    def _euclidean_similarity(
         self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
     ) -> float:
         """
-        Calculate the Euclidean distance between two Rylm fingerprints
+        Calculate the Euclidean similarity between two Rylm fingerprints.
+        
+        The similarity is computed as 1 / (1 + distance), where distance is the Euclidean distance.
+        This ensures similarity values are in the range (0, 1], with 1 indicating identical fingerprints.
 
         Parameters:
         ----------
@@ -315,29 +355,180 @@ class Similarity:
         fingerprint2 : Fingerprint
             The second Rylm fingerprint.
         normalize : bool, default True
-            If True, the similarity will be normalized by the sum of absolute values of the fingerprints.
+            If True, the distance will be normalized by the sum of absolute values of the fingerprints.
 
         Returns:
         ----------
         float
-            A similarity score between the two fingerprints.
+            A similarity score between the two fingerprints, where higher values indicate greater similarity.
         """
 
-        # Calculate the similarity as the sum of squared differences
-        similarity = 0.0
-        normalization = 0.0
-        for key in fingerprint1.values.keys():
-            if key in fingerprint2.values:
-                similarity += (fingerprint1.values[key] - fingerprint2.values[key]) ** 2
-                normalization += np.abs(fingerprint1.values[key]) + np.abs(
-                    fingerprint2.values[key]
-                )
-        if normalize:
-            if normalization == 0:
-                raise ValueError(
-                    "Normalization factor is zero, cannot compute similarity."
-                )
-            return np.sqrt(similarity) / normalization
+        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
 
+        if not fingerprint1.include_w:
+            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
+            distance = np.sum((vec1 - vec2)**2)
+            if normalize:
+                normalization = np.sum(np.abs(vec1) + np.abs(vec2))
+                if normalization == 0:
+                    raise ValueError("Normalization factor is zero, cannot compute similarity.")
+                distance = np.sqrt(distance) / normalization
+            else:
+                distance = np.sqrt(distance)
         else:
-            return np.sqrt(similarity)
+            distances = []
+            for freq, values in fp1.items():
+                distance = np.sum((np.array(values) - np.array(fp2[freq]))**2)
+                if normalize:
+                    normalization = np.sum(np.abs(np.array(values)) + np.abs(np.array(fp2[freq])))
+                    distance = np.sqrt(distance) / normalization
+                else:
+                    distance = np.sqrt(distance)
+                distances.append(distance)
+            distance = np.sum(distances)
+
+        # Convert distance to similarity
+        similarity = 1.0 / (1.0 + distance)
+        return similarity
+
+
+    def _manhattan_similarity(
+        self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
+    ) -> float:
+        """
+        Calculate the Manhattan similarity between two Rylm fingerprints.
+        
+        The similarity is computed as 1 / (1 + distance), where distance is the Manhattan distance.
+        This ensures similarity values are in the range (0, 1], with 1 indicating identical fingerprints.
+
+        Parameters:
+        ----------
+        fingerprint1 : Fingerprint
+            The first Rylm fingerprint.
+        fingerprint2 : Fingerprint
+            The second Rylm fingerprint.
+        normalize : bool, default True
+            If True, the distance will be normalized by the sum of absolute values of the fingerprints.
+
+        Returns:
+        ----------
+        float
+            A similarity score between the two fingerprints, where higher values indicate greater similarity.
+        """
+        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
+
+        if not fingerprint1.include_w:
+            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
+            distance = np.sum(np.abs(vec1 - vec2))
+            if normalize:
+                normalization = np.sum(np.abs(vec1) + np.abs(vec2))
+                if normalization == 0:
+                    raise ValueError("Normalization factor is zero, cannot compute similarity.")
+                distance /= normalization
+        else:
+            distances = []
+            for freq, values in fp1.items():
+                distance = np.sum(np.abs(np.array(values) - np.array(fp2[freq])))
+                if normalize:
+                    normalization = np.sum(np.abs(np.array(values)) + np.abs(np.array(fp2[freq])))
+                    distance /= normalization
+                distances.append(distance)
+            distance = np.sum(distances)
+
+        # Convert distance to similarity
+        similarity = 1.0 / (1.0 + distance)
+        return similarity
+
+
+    def _cosine_similarity(
+        self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
+    ) -> float:
+        """
+        Calculate the Cosine similarity between two Rylm fingerprints.
+        
+        Cosine similarity directly measures the cosine of the angle between two vectors,
+        with values in the range [-1, 1], where 1 indicates identical orientation.
+
+        Parameters:
+        ----------
+        fingerprint1 : Fingerprint
+            The first Rylm fingerprint.
+        fingerprint2 : Fingerprint
+            The second Rylm fingerprint.
+
+        Returns:
+        ----------
+        float
+            A similarity score between the two fingerprints, where higher values indicate greater similarity.
+        """
+
+        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
+
+        if not fingerprint1.include_w:
+            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
+            dot_product = np.dot(vec1, vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+
+            if norm1 == 0 or norm2 == 0:
+                raise ValueError("One of the fingerprints has zero magnitude, cannot compute similarity.")
+            cosine_similarity = dot_product / (norm1 * norm2)
+        else:
+            cosine_similarities = []
+            for freq, values in fp1.items():
+                dot_product = np.dot(values, fp2[freq])
+                norm1 = np.linalg.norm(values)
+                norm2 = np.linalg.norm(fp2[freq])
+                cosine_similarities.append(dot_product / (norm1 * norm2))
+            cosine_similarity = np.mean(cosine_similarities)
+
+        return cosine_similarity
+
+
+    def _angular_similarity(
+        self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
+    ) -> float:
+        """
+        Calculate the Angular similarity between two Rylm fingerprints.
+        
+        The similarity is computed as 1 - (angular_distance / π), where angular distance is 
+        the angle between two vectors. This ensures similarity values are in the range [0, 1], 
+        with 1 indicating identical orientation.
+
+        Parameters:
+        ----------
+        fingerprint1 : Fingerprint
+            The first Rylm fingerprint.
+        fingerprint2 : Fingerprint
+            The second Rylm fingerprint.
+
+        Returns:
+        ----------
+        float
+            A similarity score between the two fingerprints, where higher values indicate greater similarity.
+        """
+
+        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
+
+        if not fingerprint1.include_w:
+            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
+            dot_product = np.dot(vec1, vec2)
+            norm1 = np.linalg.norm(vec1)
+            norm2 = np.linalg.norm(vec2)
+
+            if norm1 == 0 or norm2 == 0:
+                raise ValueError("One of the fingerprints has zero magnitude, cannot compute similarity.")
+            angular_distance = np.arccos(np.clip(dot_product / (norm1 * norm2), -1.0, 1.0))
+            angular_similarity = 1.0 - (angular_distance / np.pi)
+        else:
+            angular_similarities = []
+            for freq, values in fp1.items():
+                dot_product = np.dot(values, fp2[freq])
+                norm1 = np.linalg.norm(values)
+                norm2 = np.linalg.norm(fp2[freq])
+                angular_distance = np.arccos(np.clip(dot_product / (norm1 * norm2), -1.0, 1.0))
+                angular_similarities.append(1.0 - (angular_distance / np.pi))
+
+            angular_similarity = np.mean(angular_similarities)
+
+        return angular_similarity
