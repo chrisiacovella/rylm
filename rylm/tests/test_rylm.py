@@ -307,7 +307,7 @@ def test_read_dataset_cache():
 
     # try to see if the cache and data.txt exists
     # define the path to the cache
-    cache_path = pathlib.Path("./rylm/tests/dataset_cache/data.txt")
+    cache_path = pathlib.Path("./tests/dataset_cache/data.txt")
 
     assert cache_path.exists(), "Cache file does not exist."
     with open(cache_path, "r") as f:
