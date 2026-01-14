@@ -3,7 +3,7 @@
 
 import pathlib
 # first see if the data.txt exists
-dir_path = pathlib.Path("./cache_test_dir")
+dir_path = pathlib.Path("./rylm/tests/dataset_cache")
 data_file_path = pathlib.Path(dir_path / "data.txt")
 if not data_file_path:
     dir_path.mkdir(parents=True, exist_ok=True)

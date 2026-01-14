@@ -300,3 +300,16 @@ def test_rylm_similarity():
     assert np.allclose(
         similarity, 0.010421885, atol=1e-2, rtol=1e-2
     ), "Similarity should match the expected value."
+
+# write a test that will read in the dataset cache
+def test_read_dataset_cache():
+    import pathlib
+
+    # define the path to the cache
+    cache_path = pathlib.Path("./rylm/tests/dataset_cache/data.txt")
+
+    assert cache_path.exists(), "Cache file does not exist."
+    with open(cache_path, "r") as f:
+        content = f.read()
+    assert content == "This is a test file for caching.\n", "Cache file content does not match."
+
