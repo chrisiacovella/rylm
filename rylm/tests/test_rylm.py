@@ -305,6 +305,7 @@ def test_rylm_similarity():
 def test_read_dataset_cache():
     import pathlib
 
+    # try to see if the cache and data.txt exists
     # define the path to the cache
     cache_path = pathlib.Path("./rylm/tests/dataset_cache/data.txt")
 
