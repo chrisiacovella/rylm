@@ -11,7 +11,7 @@ root_path = get_path_string(tests)
 
 dir_path = pathlib.Path(f"{root_path}/dataset_cache")
 data_file_path = pathlib.Path(dir_path / "data.txt")
-if not data_file_path:
+if not data_file_path.exists():
     dir_path.mkdir(parents=True, exist_ok=True)
     with open(data_file_path, "w") as f:
         f.write("This is a test file for caching.\n")
