@@ -68,6 +68,7 @@ jobs:
           echo "Dataset cache restored."
       - name: Dataset Cache Miss Info
         if: steps.cache-dataset.outputs.cache-hit != 'true'
+        shell: bash -l {0}
         run: python rylm/tests/cache-dataset.py
 
       - name: Run tests
