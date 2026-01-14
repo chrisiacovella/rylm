@@ -59,7 +59,7 @@ jobs:
         id: cache-dataset
         uses: actions/cache@v3
         with:
-          path: ./tests/dataset_cache
+          path: rylm/tests/dataset_cache
           key: ${{ runner.os }}-rylm-dataset-cache
 
       - name: Generate Dataset Cache Info
@@ -68,7 +68,7 @@ jobs:
           echo "Dataset cache restored."
       - name: Dataset Cache Miss Info
         if: steps.cache-dataset.outputs.cache-hit != 'true'
-        run: python ./tests/cache-dataset.py
+        run: python rylm/tests/cache-dataset.py
 
       - name: Run tests
         # conda setup requires this special shell

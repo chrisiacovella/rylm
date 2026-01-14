@@ -112,3 +112,33 @@ def calculate_Q_scipy(theta: np.array, phi: np.array, l: int, include_w: bool = 
     Q_l = np.sqrt(4.0 * np.pi / (2 * l + 1) * qm_sq)
 
     return Q_l
+
+def get_path_string(module) -> str:
+    """
+    Get the path as a string to an imported module.
+
+    Parameters
+    ----------
+    module : module
+        The module to get the path of.
+
+    Returns
+    -------
+    str
+        The path of the module as a string.
+    """
+
+    from importlib import resources
+    from importlib.readers import MultiplexedPath
+
+    temp_path = resources.files(module)
+    # see if we have a MultiplexedPath object
+
+    if isinstance(temp_path, MultiplexedPath):
+        if len(temp_path._paths) == 0:
+            raise ValueError(f"No paths found for module {module}")
+
+        # return the first path, which is to the directory, as a string
+        return str(temp_path._paths[0])
+    else:  # return the path as a string
+        return str(temp_path)
