@@ -9,7 +9,8 @@ import os
 
 dir_path = pathlib.Path(f"rylm/tests/dataset_cache")
 data_file_path = pathlib.Path(dir_path / "data.txt")
-print(os.path.expanduser(str(data_file_path)))
+#print the full path
+print(os.path.abspath(str(data_file_path)))
 if not data_file_path.exists():
     dir_path.mkdir(parents=True, exist_ok=True)
     with open(data_file_path, "w") as f:
