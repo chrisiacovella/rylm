@@ -2,12 +2,14 @@
 # to see if caching is working
 
 import pathlib
+import os
 # first see if the data.txt exists
 
 # get the path to the tests directory
 
 dir_path = pathlib.Path(f"~/rylm/tests/dataset_cache")
 data_file_path = pathlib.Path(dir_path / "data.txt")
+print(os.path.expanduser(str(data_file_path)))
 if not data_file_path.exists():
     dir_path.mkdir(parents=True, exist_ok=True)
     with open(data_file_path, "w") as f:
