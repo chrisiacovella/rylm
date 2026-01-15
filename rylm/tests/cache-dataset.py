@@ -6,7 +6,7 @@ import pathlib
 
 # get the path to the tests directory
 
-dir_path = pathlib.Path(f"rylm/tests/dataset_cache")
+dir_path = pathlib.Path(f"~/rylm/tests/dataset_cache")
 data_file_path = pathlib.Path(dir_path / "data.txt")
 if not data_file_path.exists():
     dir_path.mkdir(parents=True, exist_ok=True)

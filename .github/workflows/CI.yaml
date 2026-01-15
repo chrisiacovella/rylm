@@ -59,7 +59,7 @@ jobs:
         id: cache-dataset
         uses: actions/cache@v3
         with:
-          path: rylm/tests/dataset_cache
+          path: ~/rylm/tests/dataset_cache
           key: ${{ runner.os }}-rylm-dataset-cache
 
       - name: Generate Dataset Cache Info
