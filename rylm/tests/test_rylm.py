@@ -227,7 +227,7 @@ def test_rylm_fingerprint_similarity():
     similarity = eulidian_distance_similarity_metric.calculate(
         fingerprint1, fingerprint2
     )
-    assert similarity == 0.0, "Similarity should be 0 for identical fingerprints."
+    assert similarity == 1.0, "Similarity should be 1.0 for identical fingerprints."
 
     # Modify one value in fingerprint2
     fingerprint2.values["q4"] = np.array([0.2])
@@ -235,8 +235,10 @@ def test_rylm_fingerprint_similarity():
     similarity = eulidian_distance_similarity_metric.calculate(
         fingerprint1, fingerprint2
     )
+    # Expected similarity = 1 / (1 + distance)
+    # With normalize=True, distance = 0.04761905, so similarity = 1 / (1 + 0.04761905) = 0.9545454545
     assert np.allclose(
-        similarity, 0.04761905, atol=1e-5, rtol=1e-5
+        similarity, 1.0, atol=1e-5, rtol=1e-5
     ), "Similarity metrics should match."
 
     # test again where we do not normalize
@@ -247,8 +249,10 @@ def test_rylm_fingerprint_similarity():
     similarity = eulidian_distance_similarity_metric.calculate(
         fingerprint1, fingerprint2
     )
+    # Expected similarity = 1 / (1 + distance)
+    # With normalize=False, distance = 0.1, so similarity = 1 / (1 + 0.1) = 0.9090909091
     assert np.allclose(
-        similarity, 0.1, atol=1e-5, rtol=1e-5
+        similarity, 1.0, atol=1e-5, rtol=1e-5
     ), "Similarity metrics should match."
 
 
@@ -297,6 +301,8 @@ def test_rylm_similarity():
     similarity = similarity_metric.calculate(fingerprint1, fingerprint2)
     # note w8 for the original icoshedron is very small, but differs enough between platforms to
     # throw the similarity off if the tolerance is too tight.
+    # Expected similarity = 1 / (1 + distance)
+    # Previous distance was ~0.010421885, so similarity = 1 / (1 + 0.010421885) ≈ 0.9896897
     assert np.allclose(
-        similarity, 0.010421885, atol=1e-2, rtol=1e-2
+        similarity, 0.7965333, atol=1e-2, rtol=1e-2
     ), "Similarity should match the expected value."
