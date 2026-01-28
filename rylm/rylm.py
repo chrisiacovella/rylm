@@ -1,6 +1,7 @@
 import numpy as np
 from typing import Optional
 from dataclasses import dataclass
+from collections import OrderedDict
 
 @dataclass
 class Fingerprint:
@@ -23,7 +24,7 @@ class Fingerprint:
     frequencies: list[int]
     include_w: bool = True
     include_n_coord: bool = True
-    values: dict[str, np.array] = None
+    values: OrderedDict[str, np.array] = None
 
 
 class Rylm:
@@ -97,7 +98,7 @@ class Rylm:
             raise ValueError("points must be a 2D array with shape (n, 3)")
 
         if center_index < 0 or center_index >= len(points):
-            raise ValueError("center_index is out of bounds for the points array")
+            raise ValueError(f"center_index {center_index} is out of bounds for the points array")
 
         # Reorder points so that the center_index is the first row
         points = np.vstack([points[center_index], np.delete(points, center_index, axis=0)])
@@ -156,7 +157,7 @@ class Rylm:
             include_n_coord=self._include_n_coord,
         )
 
-        fingerprint_dict = {}
+        fingerprint_dict = OrderedDict()
         for l in self._frequencies:
             ql = calculate_Q_scipy(theta, phi, l)
             fingerprint_dict[f"q{l}"] = ql
@@ -232,7 +233,7 @@ class Rylm:
             include_n_coord=self._include_n_coord,
         )
 
-        fingerprint_temp = {}
+        fingerprint_temp = OrderedDict()
         for l in self._frequencies:
             steinhardt = freud.order.Steinhardt(
                 l, wl=self._include_w, wl_normalize=True
@@ -345,7 +346,7 @@ class Similarity:
         """
         Calculate the Euclidean similarity between two Rylm fingerprints.
         
-        The similarity is computed as 1 / (1 + distance), where distance is the Euclidean distance.
+        The similarity is (1-distance), where distance he Euclidean distance.
         This ensures similarity values are in the range (0, 1], with 1 indicating identical fingerprints.
 
         Parameters:
