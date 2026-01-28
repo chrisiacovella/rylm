@@ -64,10 +64,11 @@ class Rylm:
         frequencies : list[int], default [2, 4,6,8,10,12]
             A list of integers > 0, representing the frequencies to calculate with spherical harmonics.
             These frequencies should be even integers which are invariant under inversion.
+            Regardless of the order provided, they will be sorted internally from smallest to largest.
         include_w : bool, default True
             If True, the Wigner3j values will be included in the calculations if using freud.
         include_n_coord : bool, default True
-            If True, the coordination number in the fingerprint
+            If True, the coordination number will be included in the fingerprint
         """
         for l in frequencies:
             if l < 0:
@@ -76,6 +77,10 @@ class Rylm:
                 raise ValueError("Frequency l must be an even integer.")
 
         self._frequencies = frequencies
+
+        # sort the frequencies to ensure they are from smallest to largest for consistency
+        self._frequencies.sort()
+
         self._include_w = include_w
         self._include_n_coord = include_n_coord
 
