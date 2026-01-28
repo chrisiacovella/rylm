@@ -26,6 +26,20 @@ class Fingerprint:
     include_n_coord: bool = True
     values: OrderedDict[str, np.array] = None
 
+    def to_numpy(self) -> np.array:
+        """
+        Convert the fingerprint values to a single numpy array for similarity calculations.
+
+        Returns:
+        ----------
+        np.ndarray
+            A 1D numpy array containing all the fingerprint values concatenated.
+        """
+        array_list = []
+        for key in self.values:
+            array_list.append(np.array(self.values[key]).flatten())
+        return np.concatenate(array_list)
+
 
 class Rylm:
     """
@@ -325,20 +339,6 @@ class Similarity:
             fingerprint1, fingerprint2, normalize=self._normalize
         )
 
-
-    def _process_fingerprints(self, fingerprint1, fingerprint2):
-        fp1 = {
-            int(key[1:]): fingerprint1.values[key] if not fingerprint1.include_w else [fingerprint1.values[key], fingerprint1.values["w"+key[1:]]]
-            for key in fingerprint1.values.keys() if key != "n_coord"
-        }
-        fp2 = {
-            int(key[1:]): fingerprint2.values[key] if not fingerprint2.include_w else [fingerprint2.values[key], fingerprint2.values["w"+key[1:]]]
-            for key in fingerprint2.values.keys() if key != "n_coord"
-        }
-        if set(fp1.keys()) != set(fp2.keys()):
-            raise ValueError("Frequencies between fingerprints do not match.")
-
-        return fp1, fp2
             
     def _euclidean_similarity(
         self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
@@ -364,32 +364,16 @@ class Similarity:
             A similarity score between the two fingerprints, where higher values indicate greater similarity.
         """
 
-        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
+        fp1_value = fingerprint1.to_numpy()
+        fp2_value = fingerprint2.to_numpy()
 
-        if not fingerprint1.include_w:
-            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
-            distance = np.sum((vec1 - vec2)**2)
-            if normalize:
-                normalization = np.sum(np.abs(vec1) + np.abs(vec2))
-                if normalization == 0:
-                    raise ValueError("Normalization factor is zero, cannot compute similarity.")
-                distance = np.sqrt(distance) / normalization
-            else:
-                distance = np.sqrt(distance)
-        else:
-            distances = []
-            for freq, values in fp1.items():
-                distance = np.sum((np.array(values) - np.array(fp2[freq]))**2)
-                if normalize:
-                    normalization = np.sum(np.abs(np.array(values)) + np.abs(np.array(fp2[freq])))
-                    distance = np.sqrt(distance) / normalization
-                else:
-                    distance = np.sqrt(distance)
-                distances.append(distance)
-            distance = np.sum(distances)
+        distance = np.sqrt(np.sum((fp1_value - fp2_value) ** 2, axis=0))
+        if normalize:
+            normalization = np.sum(np.abs(fp1_value) + np.abs(fp2_value))
+            distance = distance / normalization
 
-        # Convert distance to similarity
-        similarity = 1.0 / (1.0 + distance)
+        similarity = 1.0 - distance
+
         return similarity
 
 
