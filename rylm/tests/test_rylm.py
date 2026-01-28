@@ -130,6 +130,18 @@ def test_fingerprint_to_numpy():
         fingerprint_array, expected_array, atol=1e-5, rtol=1e-5
     ), "Fingerprint numpy array does not match expected values."
 
+def test_reordering_of_frequencies():
+    # test that the frequencies are always ordered in ascending order
+    from rylm.rylm import Rylm
+
+    frequencies = [10, 4, 6, 12, 8]
+    rylm = Rylm(frequencies=frequencies, include_w=False)
+
+    expected_frequencies = [4, 6, 8, 10, 12]
+    assert (
+        rylm._frequencies == expected_frequencies
+    ), "Frequencies are not ordered correctly."
+
 def test_rylm_q_fingerpints_icosahedron():
     # this will compare the scipy and freud implementations of the rylm fingerprint
     # This will only calculate the magnitude of the spherical harmonics (Q_l), not Wigner 3j symbols (W_l)
