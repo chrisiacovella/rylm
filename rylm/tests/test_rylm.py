@@ -219,6 +219,32 @@ def test_rylm_q_fingerprint_icosahedron_cutoff(include_n_coord):
         ), f"Fingerprint for {key} does not match between scipy and freud implementations."
 
 
+@pytest.mark.parametrize("metric", ["euclidean", "manhattan", "dot_product"])
+def test_rylm_fingerprint_similarity_different_metrics(metric):
+    # we will test ideal cases that should give 1
+    from rylm.rylm import Fingerprint, Similarity
+    import copy
+    # Create two fingerprints with the same frequencies and values
+    fingerprint1 = Fingerprint(
+        frequencies=[4, 6],
+        include_w=True,
+        values={
+            "q4": np.array([0.1]),
+            "q6": np.array([0.2]),
+            "w4": np.array([0.3]),
+            "w6": np.array([0.4]),
+        },
+    )
+
+    fingerprint2 = copy.deepcopy(fingerprint1)
+
+    # Calculate similarity
+    similarity_metric = Similarity(metric=metric, normalize=True)
+    similarity = similarity_metric.calculate(fingerprint1, fingerprint2)
+
+    assert np.allclose(similarity, 1.0, 1e-4), f"Similarity should be 1.0 for identical fingerprints with metric {metric}."
+
+
 def test_rylm_fingerprint_similarity():
     from rylm.rylm import Fingerprint, Similarity
 

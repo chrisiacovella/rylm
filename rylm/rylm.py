@@ -284,7 +284,7 @@ class Similarity:
         Parameters:
         ----------
         metric : str, default "euclidean"
-            The similarity metric to use. Currently, only "euclidean" is supported.
+            The similarity metric to use. Currently, "euclidean", "manhattan", and "dot_product" are supported.
         normalize : bool, default True
             If True, the similarity will be normalized by the sum of absolute values of the fingerprints.
 
@@ -293,10 +293,8 @@ class Similarity:
             self.similarity_function = self._euclidean_similarity
         elif metric == "manhattan":
             self.similarity_function = self._manhattan_similarity
-        elif metric == "cosine":
-            self.similarity_function = self._cosine_similarity
-        elif metric == "angular":
-            self.similarity_function = self._angular_similarity
+        elif metric == "dot_product":
+            self.similarity_function = self._dot_product_similarity
         else:
             raise ValueError(f"Unknown metric: {metric}")
 
@@ -382,9 +380,11 @@ class Similarity:
     ) -> float:
         """
         Calculate the Manhattan similarity between two Rylm fingerprints.
-        
-        The similarity is computed as 1 / (1 + distance), where distance is the Manhattan distance.
-        This ensures similarity values are in the range (0, 1], with 1 indicating identical fingerprints.
+
+        To scale values between 0 and 1, where 1 is an ideal match,
+        the similarity is defined as 1/(1 + manhattan distance).
+
+        Normalization, if selected, is done by dividing the distance by the sum of absolute values of the fingerprints.
 
         Parameters:
         ----------
@@ -400,39 +400,25 @@ class Similarity:
         float
             A similarity score between the two fingerprints, where higher values indicate greater similarity.
         """
-        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
 
-        if not fingerprint1.include_w:
-            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
-            distance = np.sum(np.abs(vec1 - vec2))
-            if normalize:
-                normalization = np.sum(np.abs(vec1) + np.abs(vec2))
-                if normalization == 0:
-                    raise ValueError("Normalization factor is zero, cannot compute similarity.")
-                distance /= normalization
-        else:
-            distances = []
-            for freq, values in fp1.items():
-                distance = np.sum(np.abs(np.array(values) - np.array(fp2[freq])))
-                if normalize:
-                    normalization = np.sum(np.abs(np.array(values)) + np.abs(np.array(fp2[freq])))
-                    distance /= normalization
-                distances.append(distance)
-            distance = np.sum(distances)
+        vec1 = fingerprint1.to_numpy()
+        vec2 = fingerprint2.to_numpy()
 
-        # Convert distance to similarity
-        similarity = 1.0 / (1.0 + distance)
-        return similarity
+        d_T = np.sum(np.abs(vec1 - vec2))
+        if normalize:
+            normalization = np.sum(np.abs(vec1) + np.abs(vec2))
+            d_T = d_T / normalization
+
+        return 1/(1+d_T)
 
 
-    def _cosine_similarity(
+    def _dot_product_similarity(
         self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
     ) -> float:
         """
-        Calculate the Cosine similarity between two Rylm fingerprints.
+        Calculate the dot product similarity between two Rylm fingerprints.
         
-        Cosine similarity directly measures the cosine of the angle between two vectors,
-        with values in the range [-1, 1], where 1 indicates identical orientation.
+        Values are shifted, such that range is [0, 1], where 1 indicates identical orientation.
 
         Parameters:
         ----------
@@ -447,73 +433,19 @@ class Similarity:
             A similarity score between the two fingerprints, where higher values indicate greater similarity.
         """
 
-        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
+        vec1 = fingerprint1.to_numpy()
+        vec2 = fingerprint2.to_numpy()
 
-        if not fingerprint1.include_w:
-            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
-            dot_product = np.dot(vec1, vec2)
+        dot_product = np.dot(vec1, vec2)
+
+        if normalize:
             norm1 = np.linalg.norm(vec1)
             norm2 = np.linalg.norm(vec2)
 
             if norm1 == 0 or norm2 == 0:
                 raise ValueError("One of the fingerprints has zero magnitude, cannot compute similarity.")
-            cosine_similarity = dot_product / (norm1 * norm2)
-        else:
-            cosine_similarities = []
-            for freq, values in fp1.items():
-                dot_product = np.dot(values, fp2[freq])
-                norm1 = np.linalg.norm(values)
-                norm2 = np.linalg.norm(fp2[freq])
-                cosine_similarities.append(dot_product / (norm1 * norm2))
-            cosine_similarity = np.mean(cosine_similarities)
 
-        return cosine_similarity
+            dot_product = dot_product / (norm1 * norm2)
 
-
-    def _angular_similarity(
-        self, fingerprint1: Fingerprint, fingerprint2: Fingerprint, normalize=True
-    ) -> float:
-        """
-        Calculate the Angular similarity between two Rylm fingerprints.
-        
-        The similarity is computed as 1 - (angular_distance / π), where angular distance is 
-        the angle between two vectors. This ensures similarity values are in the range [0, 1], 
-        with 1 indicating identical orientation.
-
-        Parameters:
-        ----------
-        fingerprint1 : Fingerprint
-            The first Rylm fingerprint.
-        fingerprint2 : Fingerprint
-            The second Rylm fingerprint.
-
-        Returns:
-        ----------
-        float
-            A similarity score between the two fingerprints, where higher values indicate greater similarity.
-        """
-
-        fp1, fp2 = self._process_fingerprints(fingerprint1, fingerprint2)
-
-        if not fingerprint1.include_w:
-            vec1, vec2 = np.array(list(fp1.values())), np.array(list(fp2.values()))
-            dot_product = np.dot(vec1, vec2)
-            norm1 = np.linalg.norm(vec1)
-            norm2 = np.linalg.norm(vec2)
-
-            if norm1 == 0 or norm2 == 0:
-                raise ValueError("One of the fingerprints has zero magnitude, cannot compute similarity.")
-            angular_distance = np.arccos(np.clip(dot_product / (norm1 * norm2), -1.0, 1.0))
-            angular_similarity = 1.0 - (angular_distance / np.pi)
-        else:
-            angular_similarities = []
-            for freq, values in fp1.items():
-                dot_product = np.dot(values, fp2[freq])
-                norm1 = np.linalg.norm(values)
-                norm2 = np.linalg.norm(fp2[freq])
-                angular_distance = np.arccos(np.clip(dot_product / (norm1 * norm2), -1.0, 1.0))
-                angular_similarities.append(1.0 - (angular_distance / np.pi))
-
-            angular_similarity = np.mean(angular_similarities)
-
-        return angular_similarity
+        similarity_metric = 0.5*(1 + dot_product)  # scale to [0, 1]
+        return similarity_metric
