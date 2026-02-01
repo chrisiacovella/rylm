@@ -142,6 +142,131 @@ def test_reordering_of_frequencies():
         rylm._frequencies == expected_frequencies
     ), "Frequencies are not ordered correctly."
 
+def test_rylm_bad_freq():
+    from rylm.rylm import Rylm
+
+    # test that we raise an error if a bad frequency is provided
+    bad_frequencies = [3, 5, 7]
+    with pytest.raises(ValueError):
+        rylm = Rylm(frequencies=bad_frequencies, include_w=False)
+
+    bad_frequencies = [-1, 2, 4]
+    with pytest.raises(ValueError):
+        rylm = Rylm(frequencies=bad_frequencies, include_w=False)
+
+    bad_frequencies = [-2]
+    with pytest.raises(ValueError):
+        rylm = Rylm(frequencies=bad_frequencies, include_w=False)
+
+def bad_input_arrays():
+    from rylm.rylm import Rylm
+
+    rylm = Rylm(frequencies=[4, 6], include_w=False)
+
+    # if we pass anything other than a numpy array, we should raise an error
+    points = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]] # should be a numpy array
+    with pytest.raises(TypeError):
+        rylm.calculate(points=points)
+
+    # points will have wrong shape
+    points = np.array([0.0, 0.0, 0.0]) # should be Nx3
+    with pytest.raises(ValueError):
+        rylm.calculate(points=points) # should be Nx3
+
+    # points will have wrong shape of the second dimension
+    points = np.array([[0.0, 0.0], [1.0, 0.0]]) # should be Nx3
+    with pytest.raises(ValueError):
+        rylm.calculate(points=points) # should be Nx3
+
+    points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    # let us give a bad index for the center point
+    with ValueError:
+        rylm.calculate(points=points, center_index=2) # only 0 and 1 are valid
+    with ValueError:
+        rylm.calculate(points=points, center_index=-1) # only positive indices are valid
+
+def test_backend():
+    from rylm.rylm import Rylm
+
+    points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    rylm = Rylm(frequencies=[4, 6], include_w=False)
+    rylm.calculate(points=points, backend="scipy")
+    rylm.calculate(points=points, backend="freud")
+    with pytest.raises(ValueError):
+        rylm.calculate(points=points, backend="bad_backend")
+
+def test_cutoff_errors():
+    from rylm.rylm import Rylm
+
+    points = np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    rylm = Rylm(frequencies=[4, 6], include_w=False)
+    with pytest.raises(ValueError):
+        rylm.calculate(points=points, cutoff=-1.0) # negative cutoff should raise error
+    with pytest.raises(TypeError):
+        rylm.calculate(points=points, cutoff="bad_cutoff") # non-numeric cutoff should raise error
+
+def test_non_matching_fingerprints():
+    # we want to test that we raise an error if the fingerprints do not match in frequencies or include_w or n_coord
+    from rylm.rylm import Fingerprint, Similarity
+    import copy
+    # Create two fingerprints with the same frequencies and values
+    fingerprint1 = Fingerprint(
+        frequencies=[4, 6],
+        include_w=True,
+        values={
+            "q4": np.array([0.1]),
+            "q6": np.array([0.2]),
+            "w4": np.array([0.3]),
+            "w6": np.array([0.4]),
+        },
+    )
+
+
+    # Calculate similarity
+    similarity_metric = Similarity(metric="euclidean", normalize=True)
+
+    # different frequencies
+    fingerprint2 = Fingerprint(
+        frequencies=[4, 6, 8],
+        include_w=True,
+        values={
+            "q4": np.array([0.1]),
+            "q6": np.array([0.2]),
+            "q8": np.array([0.2]),
+            "w4": np.array([0.3]),
+            "w6": np.array([0.4]),
+            "w8": np.array([0.4]),
+        },
+    )
+    with pytest.raises(ValueError):
+        similarity = similarity_metric.calculate(fingerprint1, fingerprint2)
+    # different include_w
+    fingerprint2 = Fingerprint(
+        frequencies=[4, 6],
+        include_w=False,
+        values={
+            "q4": np.array([0.1]),
+            "q6": np.array([0.2]),
+        },
+    )
+    with pytest.raises(ValueError):
+        similarity = similarity_metric.calculate(fingerprint1, fingerprint2)
+    # different include_n_coord
+    fingerprint2 = Fingerprint(
+        frequencies=[4, 6],
+        include_w=True,
+        include_n_coord = True,
+        values={
+            "q4": np.array([0.1]),
+            "q6": np.array([0.2]),
+            "w4": np.array([0.3]),
+            "w6": np.array([0.4]),
+            "n_coord": np.array([5]),
+        },
+    )
+    with pytest.raises(ValueError):
+        similarity = similarity_metric.calculate(fingerprint1, fingerprint2)
+
 def test_rylm_q_fingerpints_icosahedron():
     # this will compare the scipy and freud implementations of the rylm fingerprint
     # This will only calculate the magnitude of the spherical harmonics (Q_l), not Wigner 3j symbols (W_l)
