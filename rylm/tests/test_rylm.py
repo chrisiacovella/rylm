@@ -385,6 +385,7 @@ def test_rylm_fingerprint_similarity_different_metrics(metric):
 def test_rylm_fingerprint_similarity():
     from rylm.rylm import Fingerprint, Similarity
 
+    # we will test ideal cases that should give 1 and cases that should give less than 1
     # Create two fingerprints with the same frequencies and values
     fingerprint1 = Fingerprint(
         frequencies=[4, 6],
@@ -421,6 +422,7 @@ def test_rylm_fingerprint_similarity():
     similarity = eulidian_distance_similarity_metric.calculate(
         fingerprint1, fingerprint2
     )
+
     # Expected similarity = 1 - distance
     # With normalize=True, distance = 0.04761905, so similarity = 1 - 0.04761905) = 0.95238095
     assert np.allclose(
