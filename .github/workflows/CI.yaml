@@ -55,6 +55,22 @@ jobs:
           python -m pip install . --no-deps
           micromamba list
 
+      - name: Cache Data
+        id: cache-dataset
+        uses: actions/cache@v3
+        with:
+          path: rylm/tests/dataset_cache
+          key: ${{ runner.os }}-rylm-dataset-cache
+
+      - name: Generate Dataset Cache Info
+        if: steps.cache-dataset.outputs.cache-hit == 'true'
+        run: |
+          echo "Dataset cache restored."
+      - name: Dataset Cache Miss Info
+        if: steps.cache-dataset.outputs.cache-hit != 'true'
+        shell: bash -l {0}
+        run: python rylm/tests/cache-dataset.py
+
       - name: Run tests
         # conda setup requires this special shell
         shell: bash -l {0}
